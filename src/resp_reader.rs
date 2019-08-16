@@ -25,13 +25,6 @@ impl From<io::Error> for RespError {
     }
 }
 
-impl From<std::str::Utf8Error> for RespError {
-    fn from(err: std::str::Utf8Error) -> Self {
-        RespError::Unexpected("unexpected utf8")
-    }
-}
-
-
 impl<R: BufRead> RespReader<R> {
     fn new(r: R) -> Self {
         let reader = BufReader::new(r);
@@ -47,13 +40,18 @@ impl<R: BufRead> RespReader<R> {
         if line.len() == 0 {
             return Err(RespError::Unexpected("line empty"));
         }
+
         match line[0] as char {
             '+' => {
-                let s = std::str::from_utf8(&line[1..])?;
+                let s = std::str::from_utf8(&line[1..]).or(
+                    Err(RespError::ParseFailed(format!("bad utf8")))
+                )?;
                 return Ok(RespValue::String(String::from(s)));
             }
             '-' => {
-                let s = std::str::from_utf8(&line[1..])?;
+                let s = std::str::from_utf8(&line[1..]).or(
+                    Err(RespError::ParseFailed(format!("bad utf8")))
+                )?;
                 return Ok(RespValue::Error(String::from(s)));
             }
             ':' => {
@@ -70,7 +68,9 @@ impl<R: BufRead> RespReader<R> {
             return Err(RespError::ParseFailed(format!("malformed integer")));
         }
 
-        let s = std::str::from_utf8(buf)?;
+        let s = std::str::from_utf8(buf).or(
+            Err(RespError::ParseFailed(format!("bad utf8")))
+        )?;
         let n = i64::from_str(s).or(
             Err(RespError::ParseFailed(format!("parse int failed")))
         )?;
