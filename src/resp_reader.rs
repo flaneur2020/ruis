@@ -156,5 +156,16 @@ mod tests {
             RespValue::String(b"bar".to_vec()),
         ];
         assert_eq!(r.unwrap(), RespValue::Array(v));
+
+        let br = io::Cursor::new(b"*5\r\n:1\r\n:2\r\n:3\r\n:4\r\n$6\r\nfoobar\r\n");
+        let r = RespReader::new(br).read();
+        let v = vec![
+            RespValue::Int(1),
+            RespValue::Int(2),
+            RespValue::Int(3),
+            RespValue::Int(4),
+            RespValue::String(b"foobar".to_vec()),
+        ];
+        assert_eq!(r.unwrap(), RespValue::Array(v));
     }
 }
