@@ -1,3 +1,4 @@
+use std::fmt;
 use std::io;
 use std::str::FromStr;
 use std::io::{BufReader, BufRead, Read};
@@ -8,14 +9,36 @@ struct RespReader<R> {
     reader: BufReader<R>
 }
 
-#[derive(Eq,PartialEq,Debug)]
+#[derive(Eq,PartialEq)]
 enum RespValue {
     Int(i64),
     NullString,
     NullArray,
     String(Vec<u8>),
     Array(Vec<RespValue>),
-    Error(String),
+    Error(Vec<u8>),
+}
+
+impl fmt::Debug for RespValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RespValue::NullString => write!(f, "NullString"),
+            RespValue::NullArray => write!(f, "NullArray"),
+            RespValue::Int(n) => write!(f, "Int({})", n),
+            RespValue::String(bs) => write!(f, "String('{}')", String::from_utf8_lossy(bs)),
+            RespValue::Error(bs) => write!(f, "Error('{}')", String::from_utf8_lossy(bs)),
+            RespValue::Array(arr) => {
+                write!(f, "Array([")?;
+                for i in 0..arr.len() {
+                    arr[i].fmt(f)?;
+                    if i != arr.len()-1 {
+                        write!(f, ", ")?;
+                    }
+                }
+                write!(f, "])")
+            }
+        }
+    }
 }
 
 #[derive(PartialEq,Debug)]
@@ -45,10 +68,7 @@ impl<R: BufRead> RespReader<R> {
                 return Ok(RespValue::String(line[1..].to_vec()));
             }
             '-' => {
-                let s = std::str::from_utf8(&line[1..]).or_else(|e|
-                    Err(RespError::ParseFailed(format!("bad utf8: {}", e)))
-                )?;
-                return Ok(RespValue::Error(String::from(s)));
+                return Ok(RespValue::Error(line[1..].to_vec()));
             }
             '$' => {
                 let n = self.parse_int(&line[1..])?;
@@ -142,7 +162,7 @@ mod tests {
 
         let br = io::Cursor::new(b"-ERR Bad Request\r\n");
         let r = RespReader::new(br).read();
-        assert_eq!(r.unwrap(), RespValue::Error(format!("ERR Bad Request")));
+        assert_eq!(r.unwrap(), RespValue::Error(b"ERR Bad Request".to_vec()));
 
         let br = io::Cursor::new(b"blah\r\n");
         let r = RespReader::new(br).read();
@@ -179,5 +199,23 @@ mod tests {
             RespValue::String(b"bar".to_vec()),
         ];
         assert_eq!(r.unwrap(), RespValue::Array(v));
+    }
+
+    #[test]
+    fn test_read_array_of_array() {
+        let br = io::Cursor::new(b"*2\r\n*3\r\n:1\r\n:2\r\n:3\r\n*2\r\n+Foo\r\n-Bar\r\n".to_vec());
+        let r = RespReader::new(br).read();
+        let arr = RespValue::Array(vec![
+            RespValue::Array(vec![
+                RespValue::Int(1),
+                RespValue::Int(2),
+                RespValue::Int(3),
+            ]),
+            RespValue::Array(vec![
+                RespValue::String(b"Foo".to_vec()),
+                RespValue::Error(b"Bar".to_vec()),
+            ])
+        ]);
+        assert_eq!(r.unwrap(), arr);
     }
 }
