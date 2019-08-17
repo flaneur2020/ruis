@@ -1,48 +1,17 @@
-use std::fmt;
 use std::io;
 use std::str::FromStr;
 use std::io::{BufReader, BufRead, Read};
 
+use super::value::{RespValue};
+
 // https://redis.io/topics/protocol
 
-struct RespReader<R> {
+pub struct RespReader<R> {
     reader: BufReader<R>
 }
 
-#[derive(Eq,PartialEq)]
-enum RespValue {
-    Int(i64),
-    NullString,
-    NullArray,
-    String(Vec<u8>),
-    Array(Vec<RespValue>),
-    Error(Vec<u8>),
-}
-
-impl fmt::Debug for RespValue {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            RespValue::NullString => write!(f, "NullString"),
-            RespValue::NullArray => write!(f, "NullArray"),
-            RespValue::Int(n) => write!(f, "Int({})", n),
-            RespValue::String(bs) => write!(f, "String('{}')", String::from_utf8_lossy(bs)),
-            RespValue::Error(bs) => write!(f, "Error('{}')", String::from_utf8_lossy(bs)),
-            RespValue::Array(arr) => {
-                write!(f, "Array([")?;
-                for i in 0..arr.len() {
-                    arr[i].fmt(f)?;
-                    if i != arr.len()-1 {
-                        write!(f, ", ")?;
-                    }
-                }
-                write!(f, "])")
-            }
-        }
-    }
-}
-
 #[derive(PartialEq,Debug)]
-enum RespError {
+pub enum RespReadError {
     ParseFailed(String),
     Unexpected(String),
     Unknown
@@ -57,7 +26,7 @@ impl<R: BufRead> RespReader<R> {
         }
     }
 
-    pub fn read(&mut self) -> Result<RespValue, RespError> {
+    pub fn read(&mut self) -> Result<RespValue, RespReadError> {
         let line = self.read_line()?;
         match line[0] as char {
             ':' => {
@@ -75,7 +44,7 @@ impl<R: BufRead> RespReader<R> {
                 if n == -1 {
                     return Ok(RespValue::NullString);
                 } else if n < 0 {
-                    return Err(RespError::ParseFailed(format!("malformed length")))
+                    return Err(RespReadError::ParseFailed(format!("malformed length")))
                 }
                 let s = self.read_bulk_string(n as usize)?;
                 return Ok(RespValue::String(s))
@@ -85,26 +54,26 @@ impl<R: BufRead> RespReader<R> {
                 if n == -1 {
                     return Ok(RespValue::NullArray);
                 } else if n < 0 {
-                    return Err(RespError::ParseFailed(format!("malformed length")))
+                    return Err(RespReadError::ParseFailed(format!("malformed length")))
                 }
                 let arr = self.read_array(n as usize)?;
                 return Ok(RespValue::Array(arr));
             }
             ch @ _ => {
-                Err(RespError::ParseFailed(format!("unexpected token: {}", ch)))
+                Err(RespReadError::ParseFailed(format!("unexpected token: {}", ch)))
             }
         }
     }
 
-    fn read_line(&mut self) -> Result<Vec<u8>, RespError> {
+    fn read_line(&mut self) -> Result<Vec<u8>, RespReadError> {
         let mut line: Vec<u8> = vec![];
 
         self.reader.read_until('\n' as u8, &mut line).or_else(|e|
-            Err(RespError::ParseFailed(format!("io err: {}", e)))
+            Err(RespReadError::ParseFailed(format!("io err: {}", e)))
         )?;
 
         if !line.ends_with(&['\r' as u8, '\n' as u8]) {
-            return Err(RespError::ParseFailed(format!("line not ends with CRLF")));
+            return Err(RespReadError::ParseFailed(format!("line not ends with CRLF")));
         }
 
         line.pop();
@@ -112,20 +81,20 @@ impl<R: BufRead> RespReader<R> {
         Ok(line)
     }
 
-    fn read_bulk_string(&mut self, l: usize) -> Result<Vec<u8>, RespError> {
+    fn read_bulk_string(&mut self, l: usize) -> Result<Vec<u8>, RespReadError> {
         let mut buf = vec![0u8; l];
         self.reader.read_exact(&mut buf).or_else(|e|
-            Err(RespError::ParseFailed(format!("io err: {}", e)))
+            Err(RespReadError::ParseFailed(format!("io err: {}", e)))
         )?;
 
         let line = self.read_line()?;
         if line.len() != 0 {
-            return Err(RespError::ParseFailed(format!("bad bulk string format")))
+            return Err(RespReadError::ParseFailed(format!("bad bulk string format")))
         }
         return Ok(buf);
     }
 
-    fn read_array(&mut self, n: usize) -> Result<Vec<RespValue>, RespError> {
+    fn read_array(&mut self, n: usize) -> Result<Vec<RespValue>, RespReadError> {
         let mut arr: Vec<RespValue> = vec![];
         for _ in 0..n {
             let val = self.read()?;
@@ -134,20 +103,19 @@ impl<R: BufRead> RespReader<R> {
         return Ok(arr);
     }
 
-    fn parse_int(&mut self, buf: &[u8]) -> Result<i64, RespError> {
+    fn parse_int(&mut self, buf: &[u8]) -> Result<i64, RespReadError> {
         if buf.len() == 0 {
-            return Err(RespError::ParseFailed(format!("malformed integer")));
+            return Err(RespReadError::ParseFailed(format!("malformed integer")));
         }
 
         let s = std::str::from_utf8(buf).or(
-            Err(RespError::ParseFailed(format!("bad utf8")))
+            Err(RespReadError::ParseFailed(format!("bad utf8")))
         )?;
         let n = i64::from_str(s).or(
-            Err(RespError::ParseFailed(format!("parse int failed")))
+            Err(RespReadError::ParseFailed(format!("parse int failed")))
         )?;
         return Ok(n);
     }
-
 }
 
 #[cfg(test)]
@@ -166,7 +134,7 @@ mod tests {
 
         let br = io::Cursor::new(b"blah\r\n");
         let r = RespReader::new(br).read();
-        assert_eq!(r.unwrap_err(), RespError::ParseFailed(format!("unexpected token: b")));
+        assert_eq!(r.unwrap_err(), RespReadError::ParseFailed(format!("unexpected token: b")));
 
         let br = io::Cursor::new(b"*3\r\n$3\r\nfoo\r\n$-1\r\n$3\r\nbar\r\n");
         let r = RespReader::new(br).read();
