@@ -11,9 +11,11 @@ struct RespReader<R> {
 #[derive(Eq,PartialEq,Debug)]
 enum RespValue {
     Int(i64),
-    NullBulkString,
+    NullString,
+    NullArray,
     String(Vec<u8>),
-    Error(String)
+    Array(Vec<RespValue>),
+    Error(String),
 }
 
 #[derive(PartialEq,Debug)]
@@ -49,14 +51,24 @@ impl<R: BufRead> RespReader<R> {
                 return Ok(RespValue::Error(String::from(s)));
             }
             '$' => {
-                let l = self.parse_int(&line[1..])?;
-                if l == -1 {
-                    return Ok(RespValue::NullBulkString);
-                } else if l < 0 {
-                    return Err(RespError::ParseFailed(format!("malformed bulk string")))
+                let n = self.parse_int(&line[1..])?;
+                if n == -1 {
+                    return Ok(RespValue::NullString);
+                } else if n < 0 {
+                    return Err(RespError::ParseFailed(format!("malformed length")))
                 }
-                let s = self.read_bulk_string(l as usize)?;
+                let s = self.read_bulk_string(n as usize)?;
                 return Ok(RespValue::String(s))
+            }
+            '*' => {
+                let n = self.parse_int(&line[1..])?;
+                if n == -1 {
+                    return Ok(RespValue::NullArray);
+                } else if n < 0 {
+                    return Err(RespError::ParseFailed(format!("malformed length")))
+                }
+                let arr = self.read_array(n as usize)?;
+                return Ok(RespValue::Array(arr));
             }
             ch @ _ => {
                 Err(RespError::ParseFailed(format!("unexpected token: {}", ch)))
@@ -85,8 +97,21 @@ impl<R: BufRead> RespReader<R> {
         self.reader.read_exact(&mut buf).or_else(|e|
             Err(RespError::ParseFailed(format!("io err: {}", e)))
         )?;
-        self.read_line();
+
+        let line = self.read_line()?;
+        if line.len() != 0 {
+            return Err(RespError::ParseFailed(format!("bad bulk string format")))
+        }
         return Ok(buf);
+    }
+
+    fn read_array(&mut self, n: usize) -> Result<Vec<RespValue>, RespError> {
+        let mut arr: Vec<RespValue> = vec![];
+        for _ in 0..n {
+            let val = self.read()?;
+            arr.push(val)
+        }
+        return Ok(arr);
     }
 
     fn parse_int(&mut self, buf: &[u8]) -> Result<i64, RespError> {
@@ -102,6 +127,7 @@ impl<R: BufRead> RespReader<R> {
         )?;
         return Ok(n);
     }
+
 }
 
 #[cfg(test)]
@@ -121,5 +147,14 @@ mod tests {
         let br = io::Cursor::new(b"blah\r\n");
         let r = RespReader::new(br).read();
         assert_eq!(r.unwrap_err(), RespError::ParseFailed(format!("unexpected token: b")));
+
+        let br = io::Cursor::new(b"*3\r\n$3\r\nfoo\r\n$-1\r\n$3\r\nbar\r\n");
+        let r = RespReader::new(br).read();
+        let v = vec![
+            RespValue::String(b"foo".to_vec()),
+            RespValue::NullString,
+            RespValue::String(b"bar".to_vec()),
+        ];
+        assert_eq!(r.unwrap(), RespValue::Array(v));
     }
 }
