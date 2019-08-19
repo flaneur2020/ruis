@@ -1,4 +1,4 @@
-use std::fmt;
+use std;
 
 #[derive(Eq,PartialEq)]
 pub enum RespValue {
@@ -10,8 +10,8 @@ pub enum RespValue {
     Error(Vec<u8>),
 }
 
-impl fmt::Debug for RespValue {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::fmt::Debug for RespValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             RespValue::NilBulk => write!(f, "NilBulk"),
             RespValue::NilArray => write!(f, "NilArray"),
@@ -31,3 +31,13 @@ impl fmt::Debug for RespValue {
         }
     }
 }
+
+#[derive(Debug)]
+pub enum RedisError {
+    IoError(std::io::Error),
+    ParseFailed(String),
+    Unexpected(String),
+    Unknown
+}
+
+type RedisResult<R> = Result<R, RedisError>;
