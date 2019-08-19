@@ -6,8 +6,8 @@ use super::super::types::{RespValue};
 
 // https://redis.io/topics/protocol
 
-pub struct RespReader<R> {
-    reader: BufReader<R>
+pub struct RespReader {
+    reader: Box<BufRead>
 }
 
 #[derive(PartialEq,Debug)]
@@ -17,12 +17,10 @@ pub enum RespReadError {
     Unknown
 }
 
-impl<R: BufRead> RespReader<R> {
-    pub fn new(r: R) -> Self {
-        let reader = BufReader::new(r);
-
+impl RespReader {
+    pub fn new(r: Box<BufRead>) -> Self {
         Self {
-            reader: reader,
+            reader: r,
         }
     }
 
