@@ -2,7 +2,7 @@ use std::io;
 use std::str::FromStr;
 use std::io::{BufReader, BufRead, Read};
 
-use super::value::{RespValue};
+use super::super::types::{RespValue};
 
 // https://redis.io/topics/protocol
 
@@ -34,7 +34,7 @@ impl<R: BufRead> RespReader<R> {
                 return Ok(RespValue::Int(n));
             },
             '+' => {
-                return Ok(RespValue::String(line[1..].to_vec()));
+                return Ok(RespValue::Bulk(line[1..].to_vec()));
             }
             '-' => {
                 return Ok(RespValue::Error(line[1..].to_vec()));
@@ -42,17 +42,17 @@ impl<R: BufRead> RespReader<R> {
             '$' => {
                 let n = self.parse_int(&line[1..])?;
                 if n == -1 {
-                    return Ok(RespValue::NullString);
+                    return Ok(RespValue::NilBulk);
                 } else if n < 0 {
                     return Err(RespReadError::ParseFailed(format!("malformed length")))
                 }
                 let s = self.read_bulk_string(n as usize)?;
-                return Ok(RespValue::String(s))
+                return Ok(RespValue::Bulk(s))
             }
             '*' => {
                 let n = self.parse_int(&line[1..])?;
                 if n == -1 {
-                    return Ok(RespValue::NullArray);
+                    return Ok(RespValue::NilArray);
                 } else if n < 0 {
                     return Err(RespReadError::ParseFailed(format!("malformed length")))
                 }
@@ -126,7 +126,7 @@ mod tests {
     fn test_read() {
         let br = io::Cursor::new(b"+OK\r\n");
         let r = RespReader::new(br).read();
-        assert_eq!(r.unwrap(), RespValue::String(b"OK".to_vec()));
+        assert_eq!(r.unwrap(), RespValue::Bulk(b"OK".to_vec()));
 
         let br = io::Cursor::new(b"-ERR Bad Request\r\n");
         let r = RespReader::new(br).read();
@@ -139,9 +139,9 @@ mod tests {
         let br = io::Cursor::new(b"*3\r\n$3\r\nfoo\r\n$-1\r\n$3\r\nbar\r\n");
         let r = RespReader::new(br).read();
         let v = vec![
-            RespValue::String(b"foo".to_vec()),
-            RespValue::NullString,
-            RespValue::String(b"bar".to_vec()),
+            RespValue::Bulk(b"foo".to_vec()),
+            RespValue::NilBulk,
+            RespValue::Bulk(b"bar".to_vec()),
         ];
         assert_eq!(r.unwrap(), RespValue::Array(v));
 
@@ -152,19 +152,19 @@ mod tests {
             RespValue::Int(2),
             RespValue::Int(3),
             RespValue::Int(4),
-            RespValue::String(b"foobar".to_vec()),
+            RespValue::Bulk(b"foobar".to_vec()),
         ];
         assert_eq!(r.unwrap(), RespValue::Array(v));
 
         let br = io::Cursor::new(b"*-1\r\n");
         let r = RespReader::new(br).read();
-        assert_eq!(r.unwrap(), RespValue::NullArray);
+        assert_eq!(r.unwrap(), RespValue::NilArray);
 
         let br = io::Cursor::new(b"*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n");
         let r = RespReader::new(br).read();
         let v = vec![
-            RespValue::String(b"foo".to_vec()),
-            RespValue::String(b"bar".to_vec()),
+            RespValue::Bulk(b"foo".to_vec()),
+            RespValue::Bulk(b"bar".to_vec()),
         ];
         assert_eq!(r.unwrap(), RespValue::Array(v));
     }
@@ -180,7 +180,7 @@ mod tests {
                 RespValue::Int(3),
             ]),
             RespValue::Array(vec![
-                RespValue::String(b"Foo".to_vec()),
+                RespValue::Bulk(b"Foo".to_vec()),
                 RespValue::Error(b"Bar".to_vec()),
             ])
         ]);
