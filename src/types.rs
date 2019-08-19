@@ -39,5 +39,3 @@ pub enum RedisError {
     Unexpected(String),
     Unknown
 }
-
-type RedisResult<R> = Result<R, RedisError>;
