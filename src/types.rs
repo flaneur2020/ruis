@@ -32,10 +32,27 @@ impl std::fmt::Debug for RespValue {
     }
 }
 
-#[derive(Debug)]
-pub enum RedisError {
-    IoError(std::io::Error),
+#[derive(Debug,PartialEq)]
+pub enum RespError {
+    IoError(std::io::ErrorKind),
     ParseFailed(String),
     Unexpected(String),
     Unknown
+}
+
+impl std::fmt::Display for RespError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RespError::IoError(ref err) => write!(f, "io err: {}", err),
+            RespError::ParseFailed(ref s) => write!(f, "parse failed: {}", s),
+            RespError::Unexpected(ref s) => write!(f, "unexpected: {}", s),
+            RespError::Unknown => write!(f, "unknown error"),
+        }
+    }
+}
+
+impl std::error::Error for RespError {
+    fn description(&self) -> &str {
+        "resp error"
+    }
 }
