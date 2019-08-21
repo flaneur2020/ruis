@@ -125,7 +125,7 @@ impl<W: Write> RespWriter<W> {
 
     pub fn write_int(&mut self, n: i64) -> Result<(), RespError> {
         self.writer.write_fmt(format_args!(":{}\r\n", n)).or_else(|e|
-            Err(RespError::IoError(e.kind))
+            Err(RespError::IoError(e))
         )
     }
 

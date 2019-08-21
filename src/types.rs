@@ -32,9 +32,9 @@ impl std::fmt::Debug for RespValue {
     }
 }
 
-#[derive(Debug,PartialEq)]
+#[derive(Debug)]
 pub enum RespError {
-    IoError(std::io::ErrorKind),
+    IoError(std::io::Error),
     ParseFailed(String),
     Unexpected(String),
     Unknown
