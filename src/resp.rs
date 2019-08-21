@@ -1,7 +1,7 @@
 use std::io;
 use std::str::FromStr;
-use std::io::{BufReader, BufRead, Read};
-use std::io::{Write, BufWriter};
+use std::io::{BufRead, Read};
+use std::io::{Write};
 use std::error::Error;
 
 use super::types::{RespValue, RespError};
@@ -12,8 +12,8 @@ pub struct RespReader {
     reader: Box<BufRead>
 }
 
-struct RespWriter<W: Write> {
-    writer: BufWriter<W>,
+struct RespWriter {
+    writer: Box<Write>,
 }
 
 impl RespReader {
@@ -115,11 +115,10 @@ impl RespReader {
     }
 }
 
-impl<W: Write> RespWriter<W> {
-    pub fn new(w: W) -> Self {
-        let writer = BufWriter::new(w);
+impl RespWriter {
+    pub fn new(w: Box<Write>) -> Self {
         Self {
-            writer: writer,
+            writer: w,
         }
     }
 
