@@ -117,35 +117,56 @@ impl RespReader {
 
 impl<W: Write> RespWriter<W> {
     pub fn new(w: W) -> Self {
-        let mut writer = BufWriter::new(w);
+        let writer = BufWriter::new(w);
         Self {
             writer: writer,
         }
     }
 
     pub fn write_int(&mut self, n: i64) -> Result<(), RespError> {
-        self.writer.write_fmt(format_args!(":{}\r\n", n)).or_else(|e|
-            Err(RespError::IoError(e))
-        )
-    }
-
-    pub fn write_bulk(&mut self, b: Vec<u8>) -> Result<(), RespError> {
+        self.writer.write_fmt(format_args!(":{}\r\n", n))?;
         Ok(())
     }
 
-    pub fn write_array(&mut self, arr: Vec<RespValue>) -> Result<(), RespError> {
+    pub fn write_bulk(&mut self, b: &[u8]) -> Result<(), RespError> {
+        self.writer.write_fmt(format_args!("$"))?;
+        self.write_int(b.len() as i64)?;
+        self.writer.write_all(&b)?;
+        self.writer.write_fmt(format_args!("\r\n"))?;
         Ok(())
     }
 
-    pub fn write_error(&mut self, s: String) -> Result<(), RespError> {
+    pub fn write_status(&mut self, s: &str) -> Result<(), RespError> {
+        self.writer.write_fmt(format_args!("+{}\r\n", s))?;
         Ok(())
     }
 
-    pub fn write_status(&mut self, s: String) -> Result<(), RespError> {
+    pub fn write_error(&mut self, s: &str) -> Result<(), RespError> {
+        self.writer.write_fmt(format_args!("-{}\r\n", s))?;
+        Ok(())
+    }
+
+    pub fn write_array(&mut self, arr: &[RespValue]) -> Result<(), RespError> {
+        for v in arr {
+            self.write(v)?
+        }
+        Ok(())
+    }
+
+    pub fn write(&mut self, v: &RespValue) -> Result<(), RespError> {
+        match *v {
+            RespValue::Int(n) => self.write_int(n)?,
+            RespValue::Bulk(ref s) => self.write_bulk(s)?,
+            RespValue::Error(ref s) => self.write_error(&String::from_utf8_lossy(s))?,
+            RespValue::Array(ref arr) => self.write_array(arr)?,
+            RespValue::NilArray => self.writer.write_fmt(format_args!("*\r\n-1\r\n"))?,
+            RespValue::NilBulk => self.writer.write_fmt(format_args!("$\r\n-1\r\n"))?,
+        }
         Ok(())
     }
 
     pub fn flush(&mut self) -> Result<(), RespError> {
+        self.writer.flush()?;
         Ok(())
     }
 }

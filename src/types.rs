@@ -40,6 +40,12 @@ pub enum RespError {
     Unknown
 }
 
+impl From<std::io::Error> for RespError {
+    fn from(err: std::io::Error) -> Self {
+        RespError::IoError(err)
+    }
+}
+
 impl std::fmt::Display for RespError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
