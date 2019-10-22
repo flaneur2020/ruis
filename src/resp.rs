@@ -12,8 +12,8 @@ pub struct RespReader {
     reader: Box<BufRead>
 }
 
-struct RespWriter {
-    writer: Box<Write>,
+pub struct RespWriter<'a> {
+    writer: &'a mut Write,
 }
 
 impl RespReader {
@@ -115,8 +115,8 @@ impl RespReader {
     }
 }
 
-impl RespWriter {
-    pub fn new(w: Box<Write>) -> Self {
+impl<'a> RespWriter<'a> {
+    pub fn new(w: &'a mut Write) -> Self {
         Self {
             writer: w,
         }
@@ -135,6 +135,14 @@ impl RespWriter {
         Ok(())
     }
 
+    pub fn write_bulks(&mut self, bs: &[&[u8]]) -> Result<(), RespError> {
+        self.writer.write_fmt(format_args!("*{}\r\n", bs.len()))?;
+        for b in bs {
+            self.write_bulk(b)?
+        }
+        Ok(())
+    }
+
     pub fn write_status(&mut self, s: &str) -> Result<(), RespError> {
         self.writer.write_fmt(format_args!("+{}\r\n", s))?;
         Ok(())
@@ -146,6 +154,7 @@ impl RespWriter {
     }
 
     pub fn write_array(&mut self, arr: &[RespValue]) -> Result<(), RespError> {
+        self.writer.write_fmt(format_args!("*{}\r\n", arr.len()))?;
         for v in arr {
             self.write(v)?
         }
@@ -239,4 +248,17 @@ mod tests {
         ]);
         assert_eq!(r.unwrap(), arr);
     }
+
+    #[test]
+    fn test_write_array() {
+        let mut cw = io::Cursor::new(b"".to_vec());
+        let mut w = RespWriter::new(&mut cw);
+        let val = RespValue::Array(vec![
+            RespValue::Bulk(b"foo".to_vec()),
+            RespValue::Bulk(b"bar".to_vec()),
+        ]);
+        w.write(&val).unwrap();
+        assert_eq!(String::from_utf8_lossy(&cw.into_inner()), String::from("*2\r\n$:3\r\nfoo\r\n$:3\r\nbar\r\n"))
+    }
+ 
 }
