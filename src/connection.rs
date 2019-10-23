@@ -38,7 +38,7 @@ mod tests {
     #[test]
     fn test_read() {
         let mut conn = Connection::new("localhost:6379", "").unwrap();
-        let r = conn.run(&vec!["info".as_bytes()]).unwrap();
-        assert_eq!(r, RespValue::Bulk(b"OK".to_vec()));
+        let r = conn.run(&vec!["ping".as_bytes()]).unwrap();
+        assert_eq!(r, RespValue::Bulk(b"PONG".to_vec()));
     }
 }
