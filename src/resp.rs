@@ -128,8 +128,7 @@ impl<'a> RespWriter<'a> {
     }
 
     pub fn write_bulk(&mut self, b: &[u8]) -> Result<(), RespError> {
-        self.writer.write_fmt(format_args!("$"))?;
-        self.write_int(b.len() as i64)?;
+        self.writer.write_fmt(format_args!("${}\r\n", b.len()))?;
         self.writer.write_all(&b)?;
         self.writer.write_fmt(format_args!("\r\n"))?;
         Ok(())
@@ -258,7 +257,7 @@ mod tests {
             RespValue::Bulk(b"bar".to_vec()),
         ]);
         w.write(&val).unwrap();
-        assert_eq!(String::from_utf8_lossy(&cw.into_inner()), String::from("*2\r\n$:3\r\nfoo\r\n$:3\r\nbar\r\n"))
+        assert_eq!(String::from_utf8_lossy(&cw.into_inner()), String::from("*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n"))
     }
  
 }
