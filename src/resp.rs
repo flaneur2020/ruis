@@ -8,16 +8,16 @@ use super::types::{RespValue, RespError};
 
 // https://redis.io/topics/protocol
 
-pub struct RespReader {
-    reader: Box<BufRead>
+pub struct RespReader<'a> {
+    reader: &'a mut BufRead
 }
 
 pub struct RespWriter<'a> {
     writer: &'a mut Write,
 }
 
-impl RespReader {
-    pub fn new(r: Box<BufRead>) -> Self {
+impl<'a> RespReader<'a> {
+    pub fn new(r: &'a mut BufRead) -> Self {
         Self {
             reader: r,
         }
@@ -186,19 +186,19 @@ mod tests {
 
     #[test]
     fn test_read() {
-        let br = Box::new(io::Cursor::new(b"+OK\r\n"));
+        let br = &mut io::Cursor::new(b"+OK\r\n");
         let r = RespReader::new(br).read();
         assert_eq!(r.unwrap(), RespValue::Bulk(b"OK".to_vec()));
 
-        let br = Box::new(io::Cursor::new(b"-ERR Bad Request\r\n"));
+        let br = &mut io::Cursor::new(b"-ERR Bad Request\r\n");
         let r = RespReader::new(br).read();
         assert_eq!(r.unwrap(), RespValue::Error(b"ERR Bad Request".to_vec()));
 
-        let br = Box::new(io::Cursor::new(b"blah\r\n"));
+        let br = &mut io::Cursor::new(b"blah\r\n");
         let r = RespReader::new(br).read();
         assert_eq!(format!("{}", r.unwrap_err()), format!("parse failed: unexpected token: b"));
 
-        let br = Box::new(io::Cursor::new(b"*3\r\n$3\r\nfoo\r\n$-1\r\n$3\r\nbar\r\n"));
+        let br = &mut io::Cursor::new(b"*3\r\n$3\r\nfoo\r\n$-1\r\n$3\r\nbar\r\n");
         let r = RespReader::new(br).read();
         let v = vec![
             RespValue::Bulk(b"foo".to_vec()),
@@ -207,7 +207,7 @@ mod tests {
         ];
         assert_eq!(r.unwrap(), RespValue::Array(v));
 
-        let br = Box::new(io::Cursor::new(b"*5\r\n:1\r\n:2\r\n:3\r\n:4\r\n$6\r\nfoobar\r\n"));
+        let br = &mut io::Cursor::new(b"*5\r\n:1\r\n:2\r\n:3\r\n:4\r\n$6\r\nfoobar\r\n");
         let r = RespReader::new(br).read();
         let v = vec![
             RespValue::Int(1),
@@ -218,11 +218,11 @@ mod tests {
         ];
         assert_eq!(r.unwrap(), RespValue::Array(v));
 
-        let br = Box::new(io::Cursor::new(b"*-1\r\n"));
+        let br = &mut io::Cursor::new(b"*-1\r\n");
         let r = RespReader::new(br).read();
         assert_eq!(r.unwrap(), RespValue::NilArray);
 
-        let br = Box::new(io::Cursor::new(b"*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n"));
+        let br = &mut io::Cursor::new(b"*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n");
         let r = RespReader::new(br).read();
         let v = vec![
             RespValue::Bulk(b"foo".to_vec()),
@@ -233,7 +233,7 @@ mod tests {
 
     #[test]
     fn test_read_array_of_array() {
-        let br = Box::new(io::Cursor::new(b"*2\r\n*3\r\n:1\r\n:2\r\n:3\r\n*2\r\n+Foo\r\n-Bar\r\n".to_vec()));
+        let br = &mut io::Cursor::new(b"*2\r\n*3\r\n:1\r\n:2\r\n:3\r\n*2\r\n+Foo\r\n-Bar\r\n".to_vec());
         let r = RespReader::new(br).read();
         let arr = RespValue::Array(vec![
             RespValue::Array(vec![

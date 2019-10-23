@@ -1,33 +1,33 @@
 use std::io;
 use std::net::{TcpStream};
-use std::io::{BufReader};
 use std::rc::Rc;
+use std::io::{BufRead, BufReader, Write};
 
 use super::resp::{RespWriter, RespReader};
 use super::types::{RespValue, RespError};
 
 struct Connection {
     password: String,
-    // w: RespWriter<'a>,
-    r: RespReader,
+    rs: BufReader<TcpStream>,
+    ws: TcpStream,
 }
 
 impl Connection {
-    pub fn new(addr: &str, password: &str) -> io::Result<Connection> {
+    pub fn new(addr: &str, password: &str) -> io::Result<Self> {
         let rs = TcpStream::connect(addr)?;
-        let mut ws = rs.try_clone()?;
-        let reader = RespReader::new(Box::new(BufReader::new(rs)));
-        // let writer = RespWriter::new(&mut ws);
+        let ws = rs.try_clone().unwrap();
         return Ok(Self {
             password: String::from(password),
-            // w: writer,
-            r: reader,
+            rs: BufReader::new(rs),
+            ws: ws,
         })
     }
 
     pub fn run(&mut self, cmd: &[&[u8]]) -> Result<RespValue, RespError> {
-        // self.w.write_bulks(cmd)?;
-        self.r.read()
+        let mut r = RespReader::new(&mut self.rs);
+        let mut w = RespWriter::new(&mut self.ws);
+        w.write_bulks(cmd)?;
+        r.read()
     }
 }
 
