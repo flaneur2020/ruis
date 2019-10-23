@@ -7,23 +7,26 @@ use super::resp::{RespWriter, RespReader};
 use super::types::{RespValue, RespError};
 
 struct Connection {
-    password: String,
     rs: BufReader<TcpStream>,
     ws: TcpStream,
 }
 
 impl Connection {
-    pub fn new(addr: &str, password: &str) -> io::Result<Self> {
-        let rs = TcpStream::connect(addr)?;
-        let ws = rs.try_clone().unwrap();
-        return Ok(Self {
-            password: String::from(password),
-            rs: BufReader::new(rs),
+    pub fn new(addr: &str) -> io::Result<Self> {
+        let ws = TcpStream::connect(addr)?;
+        let rs = BufReader::new(ws.try_clone()?);
+        let conn = Self {
+            rs: rs,
             ws: ws,
-        })
+        };
+        return Ok(conn)
     }
 
-    pub fn run(&mut self, cmd: &[&[u8]]) -> Result<RespValue, RespError> {
+    pub fn auth(&mut self, password: &str) -> Result<RespValue, RespError> {
+       self.execute(&vec!["auth".as_bytes(), password.as_bytes()])
+    } 
+
+    pub fn execute(&mut self, cmd: &[&[u8]]) -> Result<RespValue, RespError> {
         let mut r = RespReader::new(&mut self.rs);
         let mut w = RespWriter::new(&mut self.ws);
         w.write_bulks(cmd)?;
@@ -37,8 +40,8 @@ mod tests {
 
     #[test]
     fn test_read() {
-        let mut conn = Connection::new("localhost:6379", "").unwrap();
-        let r = conn.run(&vec!["ping".as_bytes()]).unwrap();
+        let mut conn = Connection::new("localhost:6379").unwrap();
+        let r = conn.execute(&vec!["ping".as_bytes()]).unwrap();
         assert_eq!(r, RespValue::Bulk(b"PONG".to_vec()));
     }
 }
