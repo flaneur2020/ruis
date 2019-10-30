@@ -254,7 +254,7 @@ mod tests {
 
     #[test]
     fn test_write_array() {
-        let mut cw = io::Cursor::new(b"".to_vec());
+        let cw = io::Cursor::new(b"".to_vec());
         let mut w = RespWriter::new(cw);
         let val = RespValue::Array(vec![
             RespValue::Bulk(b"foo".to_vec()),

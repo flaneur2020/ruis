@@ -32,12 +32,18 @@ impl<W: Write, R: BufRead> GenericConnection<W, R> {
 pub type TcpConnection = GenericConnection<std::net::TcpStream, BufReader<std::net::TcpStream>>;
 
 impl TcpConnection {
-    pub fn connect(addr: &str) -> io::Result<TcpConnection> {
+    pub fn connect(addr: &str, password_opt: Option<&str>) -> io::Result<TcpConnection> {
         let ws = TcpStream::connect(addr)?;
         let rs = BufReader::new(ws.try_clone()?);
         let r = RespReader::new(rs);
         let w = RespWriter::new(ws);
-        let conn = GenericConnection::new(r, w);
+        let mut conn = GenericConnection::new(r, w);
+
+        if let Some(password) = password_opt {
+            conn.auth(password).or_else(|e|
+                Err(io::Error::new(io::ErrorKind::PermissionDenied, format!("failed on auth: {}", e)))
+            )?;
+        }
         return Ok(conn)
     }
 }
@@ -48,7 +54,7 @@ mod tests {
 
     #[test]
     fn test_read() {
-        let mut conn = TcpConnection::connect("localhost:6379").unwrap();
+        let mut conn = TcpConnection::connect("localhost:6379", None).unwrap();
         let r = conn.execute(&vec!["ping".as_bytes()]).unwrap();
         assert_eq!(r, RespValue::Bulk(b"PONG".to_vec()));
     }
