@@ -6,12 +6,12 @@ use std::io::{BufRead, BufReader, Write};
 use super::resp::{RespWriter, RespReader};
 use super::types::{RespValue, RespError};
 
-struct Connection<W: Write> {
+pub struct Connection<W: Write> {
     w: RespWriter<W>,
     r: RespReader,
 }
 
-fn connect(addr: &str) -> io::Result<Connection<std::net::TcpStream>> {
+pub fn connect(addr: &str) -> io::Result<Connection<std::net::TcpStream>> {
     let ws = TcpStream::connect(addr)?;
     let rs = BufReader::new(ws.try_clone()?);
     let r = RespReader::new(Box::new(rs));
@@ -24,7 +24,6 @@ fn connect(addr: &str) -> io::Result<Connection<std::net::TcpStream>> {
 }
 
 impl<W: Write> Connection<W> {
-
     pub fn auth(&mut self, password: &str) -> Result<RespValue, RespError> {
        self.execute(&vec!["auth".as_bytes(), password.as_bytes()])
     }
