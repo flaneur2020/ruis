@@ -11,12 +11,14 @@ pub struct Connection<W: Write> {
     r: RespReader,
 }
 
-pub fn connect(addr: &str) -> io::Result<Connection<std::net::TcpStream>> {
+type TcpConnection = Connection<std::net::TcpStream>;
+
+pub fn connect(addr: &str) -> io::Result<TcpConnection> {
     let ws = TcpStream::connect(addr)?;
     let rs = BufReader::new(ws.try_clone()?);
     let r = RespReader::new(Box::new(rs));
     let w = RespWriter::new(ws);
-    let conn = Connection {
+    let conn = TcpConnection {
         r: r,
         w: w,
     };
