@@ -8,16 +8,16 @@ use super::types::{RespValue, RespError};
 
 // https://redis.io/topics/protocol
 
-pub struct RespReader {
-    reader: Box<BufRead>
+pub struct RespReader<R: BufRead> {
+    reader: R
 }
 
 pub struct RespWriter<W: Write> {
     writer: W,
 }
 
-impl RespReader {
-    pub fn new(r: Box<BufRead>) -> Self {
+impl<R: BufRead> RespReader<R> {
+    pub fn new(r: R) -> Self {
         Self {
             reader: r,
         }

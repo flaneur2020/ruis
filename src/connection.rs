@@ -6,17 +6,19 @@ use std::io::{BufRead, BufReader, Write};
 use super::resp::{RespWriter, RespReader};
 use super::types::{RespValue, RespError};
 
-pub struct Connection<W: Write> {
+pub struct GenericConnection<W: Write, R: BufRead> {
     w: RespWriter<W>,
-    r: RespReader,
+    r: RespReader<R>,
 }
 
-type TcpConnection = Connection<std::net::TcpStream>;
+type TcpConnection = GenericConnection<
+    std::net::TcpStream,
+    BufReader<std::net::TcpStream>>;
 
 pub fn connect(addr: &str) -> io::Result<TcpConnection> {
     let ws = TcpStream::connect(addr)?;
     let rs = BufReader::new(ws.try_clone()?);
-    let r = RespReader::new(Box::new(rs));
+    let r = RespReader::new(rs);
     let w = RespWriter::new(ws);
     let conn = TcpConnection {
         r: r,
@@ -25,7 +27,7 @@ pub fn connect(addr: &str) -> io::Result<TcpConnection> {
     return Ok(conn)
 }
 
-impl<W: Write> Connection<W> {
+impl<W: Write, R: BufRead> GenericConnection<W, R> {
     pub fn auth(&mut self, password: &str) -> Result<RespValue, RespError> {
        self.execute(&vec!["auth".as_bytes(), password.as_bytes()])
     }
