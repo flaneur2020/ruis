@@ -1,6 +1,5 @@
 use std::io;
 use std::net::{TcpStream};
-use std::rc::Rc;
 use std::io::{BufRead, BufReader, Write};
 
 use super::resp::{RespWriter, RespReader};
