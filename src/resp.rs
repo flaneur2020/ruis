@@ -12,8 +12,8 @@ pub struct RespReader {
     reader: Box<BufRead>
 }
 
-pub struct RespWriter {
-    writer: Box<Write>,
+pub struct RespWriter<W: Write> {
+    writer: W,
 }
 
 impl RespReader {
@@ -115,11 +115,15 @@ impl RespReader {
     }
 }
 
-impl RespWriter {
-    pub fn new(w: Box<Write>) -> Self {
+impl<W: Write> RespWriter<W> {
+    pub fn new(w: W) -> Self {
         Self {
             writer: w,
         }
+    }
+
+    pub fn into_inner(self) -> W {
+        self.writer
     }
 
     pub fn write_int(&mut self, n: i64) -> Result<(), RespError> {
@@ -251,13 +255,13 @@ mod tests {
     #[test]
     fn test_write_array() {
         let mut cw = io::Cursor::new(b"".to_vec());
-        let mut w = RespWriter::new(Box::new(cw));
+        let mut w = RespWriter::new(cw);
         let val = RespValue::Array(vec![
             RespValue::Bulk(b"foo".to_vec()),
             RespValue::Bulk(b"bar".to_vec()),
         ]);
         w.write(&val).unwrap();
-        // assert_eq!(String::from_utf8_lossy(&cw.into_inner()), String::from("*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n"))
+        let cw = w.into_inner();
+        assert_eq!(String::from_utf8_lossy(&cw.into_inner()), String::from("*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n"))
     }
- 
 }

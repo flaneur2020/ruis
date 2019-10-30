@@ -6,23 +6,24 @@ use std::io::{BufRead, BufReader, Write};
 use super::resp::{RespWriter, RespReader};
 use super::types::{RespValue, RespError};
 
-struct Connection {
-    w: RespWriter,
+struct Connection<W: Write> {
+    w: RespWriter<W>,
     r: RespReader,
 }
 
-impl Connection {
-    pub fn new(addr: &str) -> io::Result<Self> {
-        let ws = TcpStream::connect(addr)?;
-        let rs = BufReader::new(ws.try_clone()?);
-        let r = RespReader::new(Box::new(rs));
-        let w = RespWriter::new(Box::new(ws));
-        let conn = Self {
-            r: r,
-            w: w,
-        };
-        return Ok(conn)
-    }
+fn connect(addr: &str) -> io::Result<Connection<std::net::TcpStream>> {
+    let ws = TcpStream::connect(addr)?;
+    let rs = BufReader::new(ws.try_clone()?);
+    let r = RespReader::new(Box::new(rs));
+    let w = RespWriter::new(ws);
+    let conn = Connection {
+        r: r,
+        w: w,
+    };
+    return Ok(conn)
+}
+
+impl<W: Write> Connection<W> {
 
     pub fn auth(&mut self, password: &str) -> Result<RespValue, RespError> {
        self.execute(&vec!["auth".as_bytes(), password.as_bytes()])
@@ -40,7 +41,7 @@ mod tests {
 
     #[test]
     fn test_read() {
-        let mut conn = Connection::new("localhost:6379").unwrap();
+        let mut conn = connect("localhost:6379").unwrap();
         let r = conn.execute(&vec!["ping".as_bytes()]).unwrap();
         assert_eq!(r, RespValue::Bulk(b"PONG".to_vec()));
     }
