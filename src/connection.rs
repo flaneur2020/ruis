@@ -7,16 +7,17 @@ use super::resp::{RespWriter, RespReader};
 use super::types::{RespValue, RespError};
 
 struct Connection {
-    rs: BufReader<TcpStream>,
     ws: TcpStream,
+    r: RespReader,
 }
 
 impl Connection {
     pub fn new(addr: &str) -> io::Result<Self> {
         let ws = TcpStream::connect(addr)?;
         let rs = BufReader::new(ws.try_clone()?);
+        let r = RespReader::new(Box::new(rs));
         let conn = Self {
-            rs: rs,
+            r: r,
             ws: ws,
         };
         return Ok(conn)
@@ -24,13 +25,12 @@ impl Connection {
 
     pub fn auth(&mut self, password: &str) -> Result<RespValue, RespError> {
        self.execute(&vec!["auth".as_bytes(), password.as_bytes()])
-    } 
+    }
 
     pub fn execute(&mut self, cmd: &[&[u8]]) -> Result<RespValue, RespError> {
-        let mut r = RespReader::new(&mut self.rs);
         let mut w = RespWriter::new(&mut self.ws);
         w.write_bulks(cmd)?;
-        r.read()
+        self.r.read()
     }
 }
 

@@ -1,11 +1,11 @@
 struct Client {
     addr: String,
-    password: String,
+    password: Option<String>,
     max_idle_conns: usize,
 }
 
 impl Client {
-    fn new(addr: String, password: String) -> Client {
+    fn new(addr: String, password: Option<String>) -> Client {
         Client {
             addr: addr,
             password: password,
