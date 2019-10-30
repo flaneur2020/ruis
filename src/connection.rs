@@ -11,23 +11,14 @@ pub struct GenericConnection<W: Write, R: BufRead> {
     r: RespReader<R>,
 }
 
-type TcpConnection = GenericConnection<
-    std::net::TcpStream,
-    BufReader<std::net::TcpStream>>;
-
-pub fn connect(addr: &str) -> io::Result<TcpConnection> {
-    let ws = TcpStream::connect(addr)?;
-    let rs = BufReader::new(ws.try_clone()?);
-    let r = RespReader::new(rs);
-    let w = RespWriter::new(ws);
-    let conn = TcpConnection {
-        r: r,
-        w: w,
-    };
-    return Ok(conn)
-}
-
 impl<W: Write, R: BufRead> GenericConnection<W, R> {
+    pub fn new(r: RespReader<R>, w: RespWriter<W>) -> Self {
+        Self {
+            w: w,
+            r: r
+        }
+    }
+
     pub fn auth(&mut self, password: &str) -> Result<RespValue, RespError> {
        self.execute(&vec!["auth".as_bytes(), password.as_bytes()])
     }
@@ -38,13 +29,26 @@ impl<W: Write, R: BufRead> GenericConnection<W, R> {
     }
 }
 
+pub type TcpConnection = GenericConnection<std::net::TcpStream, BufReader<std::net::TcpStream>>;
+
+impl TcpConnection {
+    pub fn connect(addr: &str) -> io::Result<TcpConnection> {
+        let ws = TcpStream::connect(addr)?;
+        let rs = BufReader::new(ws.try_clone()?);
+        let r = RespReader::new(rs);
+        let w = RespWriter::new(ws);
+        let conn = GenericConnection::new(r, w);
+        return Ok(conn)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_read() {
-        let mut conn = connect("localhost:6379").unwrap();
+        let mut conn = TcpConnection::connect("localhost:6379").unwrap();
         let r = conn.execute(&vec!["ping".as_bytes()]).unwrap();
         assert_eq!(r, RespValue::Bulk(b"PONG".to_vec()));
     }
