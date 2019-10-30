@@ -7,7 +7,7 @@ use super::resp::{RespWriter, RespReader};
 use super::types::{RespValue, RespError};
 
 struct Connection {
-    ws: TcpStream,
+    w: RespWriter,
     r: RespReader,
 }
 
@@ -16,9 +16,10 @@ impl Connection {
         let ws = TcpStream::connect(addr)?;
         let rs = BufReader::new(ws.try_clone()?);
         let r = RespReader::new(Box::new(rs));
+        let w = RespWriter::new(Box::new(ws));
         let conn = Self {
             r: r,
-            ws: ws,
+            w: w,
         };
         return Ok(conn)
     }
@@ -28,8 +29,7 @@ impl Connection {
     }
 
     pub fn execute(&mut self, cmd: &[&[u8]]) -> Result<RespValue, RespError> {
-        let mut w = RespWriter::new(&mut self.ws);
-        w.write_bulks(cmd)?;
+        self.w.write_bulks(cmd)?;
         self.r.read()
     }
 }
